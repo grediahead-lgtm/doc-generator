@@ -18,7 +18,14 @@ def parse_dec(s, what, row):
         d = Decimal(str(s).strip().replace(" ", "").replace(",", "."))
     except InvalidOperation:
         raise ValueError("row %d: %s %r is not a number" % (row, what, s))
+    if not d.is_finite():
+        raise ValueError("row %d: %s %r is not a finite number" % (row, what, s))
     return d
+
+
+def fmt_qty(q):
+    s = format(q.normalize(), "f")  # plain digits, no exponent and no rounding to 6 digits
+    return s
 
 
 def read_items(path):
@@ -62,10 +69,13 @@ def render(spec, items):
     total, vat = totals(items, vat_p)
     rows = "".join(
         "<tr><td>%d</td><td>%s</td><td>%s</td><td class=n>%s</td><td class=n>%s</td><td class=n>%s</td></tr>" % (
-            k, e(i["name"]), e(i["unit"]), e("{:g}".format(i["qty"])), money(i["price"]), money(i["sum"]))
+            k, e(i["name"]), e(i["unit"]), e(fmt_qty(i["qty"])), money(i["price"]), money(i["sum"]))
         for k, i in enumerate(items, start=1))
     s, b = spec["seller"], spec["buyer"]
-    vat_line = "<p>У тому числі ПДВ %s%%: %s грн</p>" % (e("{:g}".format(vat_p)), money(vat)) if vat_p else "<p>Без ПДВ</p>"
+    for who, p in (("seller", s), ("buyer", b)):
+        if not isinstance(p, dict) or not str(p.get("name", "")).strip():
+            raise ValueError("%s.name is required" % who)
+    vat_line = "<p>У тому числі ПДВ %s%%: %s грн</p>" % (e(fmt_qty(vat_p)), money(vat)) if vat_p else "<p>Без ПДВ</p>"
     return """<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><title>%(title)s № %(number)s</title>
 <style>body{font:14px/1.45 Arial,sans-serif;max-width:800px;margin:24px auto;padding:0 16px}

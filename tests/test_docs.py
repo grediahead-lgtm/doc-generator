@@ -63,6 +63,20 @@ class ItemsTests(unittest.TestCase):
                 with self.assertRaises(ValueError, msg=text):
                     read_items(self.write(d, text))
 
+    def test_nan_and_infinity_are_clean_errors(self):
+        with tempfile.TemporaryDirectory() as d:
+            for bad in ("NaN", "Infinity", "-Infinity", "sNaN"):
+                with self.assertRaises(ValueError, msg=bad):
+                    read_items(self.write(d, "name,qty,price\nx,%s,1\n" % bad))
+                with self.assertRaises(ValueError, msg=bad):
+                    read_items(self.write(d, "name,qty,price\nx,1,%s\n" % bad))
+
+    def test_large_and_fractional_quantities_are_shown_exactly(self):
+        from doc_gen.render import fmt_qty
+        self.assertEqual(fmt_qty(Decimal("1234567.5")), "1234567.5")
+        self.assertEqual(fmt_qty(Decimal("2.0")), "2")
+        self.assertEqual(fmt_qty(Decimal("100")), "100")  # normalize() alone would give 1E+2
+
     def test_decimal_comma(self):
         with tempfile.TemporaryDirectory() as d:
             items = read_items(self.write(d, 'name,qty,price\nx,"2,5","10,10"\n'))
@@ -82,6 +96,10 @@ class RenderTests(unittest.TestCase):
         self.assertIn("A &lt;b&gt;", out)
         self.assertIn("Двадцять гривень 00 копійок", out)
         self.assertIn("Без ПДВ", out)
+
+    def test_party_without_a_name_is_a_clean_error(self):
+        with self.assertRaises(ValueError):
+            render(dict(self.SPEC, buyer={}), self.items())
 
     def test_bad_type_and_number(self):
         with self.assertRaises(ValueError):
